@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "High-performance API gateway for intelligent request routing, rate limiting, caching, load balancing, retries, and service/model failover."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
 authors = [
     { name = "Vimal Sahani", email = "vimalsahani2005@gmail.com" }
 ]
@@ -43,6 +43,11 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "ruff>=0.5.0"
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["edgeflow*"]
+exclude = ["api*", "dashboard*", "mock_services*", "tests*", "benchmarks*", "scripts*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
