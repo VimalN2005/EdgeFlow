@@ -1,0 +1,59 @@
+version: "3.8"
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: edgeflow-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  edgeflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: edgeflow-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=production
+      - RATE_LIMIT_FREE=30
+      - RATE_LIMIT_PRO=120
+      - RATE_LIMIT_ENTERPRISE=600
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mock-upstream-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mock-upstream-1
+    command: ["python", "mock_services/upstream_server.py", "--id", "openai-primary", "--port", "9001"]
+    ports:
+      - "9001:9001"
+    restart: unless-stopped
+
+  mock-upstream-fallback:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mock-upstream-fallback
+    command: ["python", "mock_services/upstream_server.py", "--id", "claude-fallback", "--port", "9003", "--fallback"]
+    ports:
+      - "9003:9003"
+    restart: unless-stopped
+
+volumes:
+  redis-data:

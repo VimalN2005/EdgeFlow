@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "edgeflow"
+version = "0.1.0"
+description = "High-performance API gateway for intelligent request routing, rate limiting, caching, load balancing, retries, and service/model failover."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Vimal Sahani", email = "vimalsahani2005@gmail.com" }
+]
+keywords = [
+    "api-gateway",
+    "fastapi",
+    "redis",
+    "load-balancer",
+    "rate-limiter",
+    "llm-gateway",
+    "circuit-breaker",
+    "failover",
+    "traffic-routing"
+]
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.8.0",
+    "pydantic-settings>=2.4.0",
+    "redis>=5.0.0",
+    "fakeredis>=2.23.0",
+    "httpx>=0.27.0",
+    "prometheus-client>=0.20.0",
+    "pyjwt>=2.8.0",
+    "tenacity>=8.5.0",
+    "rich>=13.7.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.5.0"
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
