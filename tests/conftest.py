@@ -6,7 +6,7 @@ import httpx
 from edgeflow.config import settings
 from edgeflow.core.redis_client import redis_manager
 from edgeflow.core.router import router_engine
-from edgeflow.main import app, seed_default_routes
+from edgeflow.main import app as gateway_app, seed_default_routes
 
 
 @pytest.fixture(scope="session")
@@ -33,6 +33,6 @@ async def setup_test_redis():
 @pytest_asyncio.fixture
 async def client():
     """Async HTTP test client for EdgeFlow app."""
-    transport = httpx.ASGITransport(app=app)
+    transport = httpx.ASGITransport(app=gateway_app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as ac:
         yield ac

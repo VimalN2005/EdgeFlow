@@ -21,7 +21,7 @@ from edgeflow.config import settings
 from edgeflow.core.load_balancer import LoadBalancingStrategy, UpstreamTarget
 from edgeflow.core.redis_client import redis_manager
 from edgeflow.core.router import RouteRule, router_engine
-from edgeflow.main import app
+from edgeflow.main import app as gateway_app
 
 console = Console(legacy_windows=False)
 
@@ -42,7 +42,7 @@ async def run_live_demo():
 
     # 1. Health Probe
     console.print("\n[bold yellow]--- Step 1: Health & Kubernetes Probes ---[/bold yellow]")
-    transport = httpx.ASGITransport(app=app)
+    transport = httpx.ASGITransport(app=gateway_app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
         r_ready = await client.get("/readyz")
         console.print(f"[green][OK] /readyz Probe:[/green] {r_ready.json()}")

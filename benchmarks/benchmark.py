@@ -20,7 +20,7 @@ import httpx
 from edgeflow.config import settings
 from edgeflow.core.redis_client import redis_manager
 from edgeflow.core.router import DispatchResult, router_engine
-from edgeflow.main import app, seed_default_routes
+from edgeflow.main import app as gateway_app, seed_default_routes
 
 
 async def run_scenario(
@@ -125,7 +125,7 @@ async def main():
         latency_ms=0.5,
     )
 
-    transport = httpx.ASGITransport(app=app)
+    transport = httpx.ASGITransport(app=gateway_app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
         print(f"\n=========================================================================")
         print(f"            EDGEFLOW HIGH-PERFORMANCE BENCHMARK SUITE")

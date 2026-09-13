@@ -52,3 +52,6 @@ python_files = ["test_*.py"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+
+[tool.vercel]
+entrypoint = "edgeflow.main:app"
