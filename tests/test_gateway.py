@@ -117,3 +117,32 @@ async def test_prometheus_metrics_endpoint(client: httpx.AsyncClient):
     resp = await client.get("/metrics")
     assert resp.status_code == 200
     assert "edgeflow_requests_total" in resp.text
+
+
+@pytest.mark.asyncio
+async def test_gateway_chat_completions_streaming(client: httpx.AsyncClient):
+    async def fake_stream_chunks():
+        yield b'data: {"choices":[{"delta":{"content":"Streaming token"}}}\n\n'
+        yield b'data: [DONE]\n\n'
+
+    mock_resp = httpx.Response(200, headers={"content-type": "text/event-stream"})
+    mock_resp.aiter_bytes = fake_stream_chunks
+
+    with patch.object(router_engine, "dispatch_stream", return_value=(mock_resp, "openai-primary", False)):
+        payload = {
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "Stream test"}],
+            "stream": True,
+        }
+        res = await client.post(
+            "/v1/chat/completions",
+            json=payload,
+            headers={"X-API-Key": "ef-live-pro-key"},
+        )
+        assert res.status_code == 200
+        assert res.headers["X-EdgeFlow-Stream"] == "true"
+        assert res.headers["X-EdgeFlow-Target"] == "openai-primary"
+        assert "text/event-stream" in res.headers["content-type"]
+        assert "Streaming token" in res.text
+        assert "[DONE]" in res.text
+

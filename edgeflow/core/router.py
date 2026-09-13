@@ -256,6 +256,91 @@ class RouterEngine:
             fallback_target.record_completion(latency, success=False)
             raise RuntimeError(f"Fallback target '{fallback_target.id}' failed: {exc}") from exc
 
+    async def dispatch_stream(
+        self,
+        route: RouteRule,
+        method: str,
+        subpath: str,
+        headers: Dict[str, str],
+        content: bytes,
+        params: Dict[str, str],
+    ) -> Tuple[httpx.Response, str, bool]:
+        """Dispatch streaming response with circuit breaker and failover support."""
+        primary_target = load_balancer.select_target(
+            targets=route.primary_targets,
+            strategy=route.strategy,
+            pool_id=f"{route.id}:primary",
+        )
+
+        client = await self.get_http_client()
+
+        # 1. Attempt Primary Target
+        if primary_target is not None:
+            cb = self.get_circuit_breaker(primary_target.id)
+            if await cb.can_execute():
+                url = primary_target.url.rstrip("/") + ("/" + subpath.lstrip("/") if subpath else "")
+                fwd_headers = {k: v for k, v in headers.items() if k.lower() not in ("host", "content-length")}
+                if primary_target.headers:
+                    fwd_headers.update(primary_target.headers)
+
+                try:
+                    req = client.build_request(
+                        method=method,
+                        url=url,
+                        headers=fwd_headers,
+                        content=content,
+                        params=params,
+                        timeout=route.timeout,
+                    )
+                    resp = await client.send(req, stream=True)
+                    if resp.status_code < 500:
+                        await cb.record_success()
+                        return resp, primary_target.id, False
+                    else:
+                        await resp.aclose()
+                        await cb.record_failure()
+                except Exception as exc:
+                    logger.warning("Streaming request failed on primary '%s': %s", primary_target.id, exc)
+                    await cb.record_failure()
+
+        # 2. Fallback Target
+        if not route.fallback_targets:
+            raise RuntimeError(f"No available upstream targets for streaming route '{route.id}'.")
+
+        fallback_target = load_balancer.select_target(
+            targets=route.fallback_targets,
+            strategy=route.strategy,
+            pool_id=f"{route.id}:fallback",
+        )
+        if fallback_target is None:
+            raise RuntimeError("All fallback targets exhausted for streaming.")
+
+        cb_fallback = self.get_circuit_breaker(fallback_target.id)
+        if not await cb_fallback.can_execute():
+            raise CircuitBreakerOpenException(fallback_target.id, remaining_seconds=cb_fallback.recovery_time_seconds)
+
+        url = fallback_target.url.rstrip("/") + ("/" + subpath.lstrip("/") if subpath else "")
+        fwd_headers = {k: v for k, v in headers.items() if k.lower() not in ("host", "content-length")}
+        if fallback_target.headers:
+            fwd_headers.update(fallback_target.headers)
+
+        req = client.build_request(
+            method=method,
+            url=url,
+            headers=fwd_headers,
+            content=content,
+            params=params,
+            timeout=route.timeout,
+        )
+        resp = await client.send(req, stream=True)
+        if resp.status_code < 500:
+            await cb_fallback.record_success()
+        else:
+            await cb_fallback.record_failure()
+
+        FAILOVER_EVENTS.labels(from_target=primary_target.id if primary_target else "none", to_target=fallback_target.id).inc()
+        return resp, fallback_target.id, True
+
     async def close(self) -> None:
         if self._http_client is not None:
             await self._http_client.aclose()

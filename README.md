@@ -1,9 +1,10 @@
 # EdgeFlow
 
 [![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.14-blue.svg)](https://www.python.org/)
+[![CI](https://github.com/VimalN2005/EdgeFlow/actions/workflows/ci.yml/badge.svg)](https://github.com/VimalN2005/EdgeFlow/actions)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Redis](https://img.shields.io/badge/Redis-Distributed%20Cache%20%26%20RateLimit-DC382D.svg?logo=redis&logoColor=white)](https://redis.io)
-[![Tests](https://img.shields.io/badge/Tests-23%2F23%20Passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-24%2F24%20Passed-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 > High-performance API gateway for intelligent request routing, rate limiting, caching, load balancing, retries, and service/model failover.
@@ -172,9 +173,11 @@ When all primary instances fail or trip their circuit breakers, EdgeFlow transpa
 - **Automatic Multi-Provider Failover**: Zero-downtime rerouting from failing primary models (e.g. OpenAI) to backup providers (e.g. Claude, Gemini, or local vLLM).
 - **Five Load Balancing Algorithms**: Round-robin, weighted round-robin, least connections, latency-aware, and random.
 - **Resilient Jittered Retries**: Exponential backoff with full randomization to prevent downstream thundering herd problems.
+- **Server-Sent Events (SSE) Streaming**: Full token-by-token streaming proxying for `/v1/chat/completions` with `stream: true`.
 - **Full Telemetry & Prometheus Metrics**: Built-in `/metrics` endpoint exposing request counters, latency histograms, rate-limit rejections, and circuit states.
 - **Zero-Friction Dual Redis Engine**: Automatically connects to external production Redis (`redis://...`); seamlessly defaults to in-memory FakeRedis if Redis is not running locally.
 - **OpenAI Compatible Endpoint**: Native drop-in `/v1/chat/completions` proxy for seamless integration with OpenAI SDK, LangChain, or LiteLLM.
+- **Interactive Control Plane & CLI Demo**: Real-time Streamlit dashboard and terminal demonstration runner (`scripts/demo_cli.py`).
 
 ---
 
@@ -330,9 +333,25 @@ docker compose ps
 
 ---
 
+### Interactive Dashboard & Live Demo
+
+1. **Run the Terminal Live Demo:**
+   ```bash
+   python scripts/demo_cli.py
+   ```
+   *Walks through health probes, route registration, cache hits/misses, rate limiting, and simulated failover in under 2 seconds.*
+
+2. **Launch the Visual Control Plane Dashboard:**
+   ```bash
+   streamlit run dashboard/app.py
+   ```
+   *Provides a real-time interactive playground to test prompts, inspect headers, trigger simulated failovers, and observe circuit breaker states.*
+
+---
+
 ### Running Tests
 
-EdgeFlow includes a comprehensive suite of 23 unit and integration tests:
+EdgeFlow includes a comprehensive suite of 24 unit and integration tests:
 
 ```bash
 pytest -v
@@ -347,7 +366,7 @@ tests/test_gateway.py ......... PASSED
 tests/test_load_balancer.py ... PASSED
 tests/test_rate_limiter.py .... PASSED
 tests/test_router.py .......... PASSED
-==================== 23 passed in 0.52s ====================
+==================== 24 passed in 0.55s ====================
 ```
 
 ---

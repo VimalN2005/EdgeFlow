@@ -3,7 +3,7 @@ import logging
 import time
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from fastapi.responses import JSONResponse, Response as StarletteResponse
+from fastapi.responses import JSONResponse, Response as StarletteResponse, StreamingResponse
 from edgeflow.config import settings
 from edgeflow.core.auth import ClientIdentity, authenticate_request
 from edgeflow.core.cache import response_cache
@@ -76,12 +76,14 @@ async def handle_gateway_request(
             })
             return StarletteResponse(content=content, status_code=status_code, headers=out_headers)
 
-    # 3. Model Extraction (for intelligent LLM routing)
+    # 3. Model & Stream Extraction (for intelligent LLM routing)
     model_name: Optional[str] = None
+    is_stream: bool = False
     if body_bytes and "application/json" in request.headers.get("content-type", ""):
         try:
             body_json = json.loads(body_bytes)
             model_name = body_json.get("model")
+            is_stream = bool(body_json.get("stream", False))
         except Exception:
             pass
 
@@ -101,6 +103,56 @@ async def handle_gateway_request(
 
     # 5. Upstream Dispatch (Load Balancing, Circuit Breakers, Retries, Failover)
     subpath = path[len(route.path_prefix):] if path.startswith(route.path_prefix) else path
+
+    # Handle Streaming SSE Requests
+    if is_stream:
+        try:
+            stream_resp, target_id, is_fallback = await router_engine.dispatch_stream(
+                route=route,
+                method=method,
+                subpath=subpath,
+                headers=dict(request.headers),
+                content=body_bytes,
+                params=dict(request.query_params),
+            )
+        except CircuitBreakerOpenException as cbe:
+            REQUESTS_TOTAL.labels(method=method, endpoint=path, status_code="503").inc()
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"error": str(cbe)},
+                headers={"X-Request-ID": req_id, "Retry-After": str(int(cbe.remaining_seconds))},
+            )
+        except Exception as exc:
+            REQUESTS_TOTAL.labels(method=method, endpoint=path, status_code="502").inc()
+            logger.error("All upstream backends failed for streaming route '%s': %s", route.id, exc)
+            return JSONResponse(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                content={"error": f"Upstream service unavailable for streaming: {str(exc)}"},
+                headers={"X-Request-ID": req_id},
+            )
+
+        async def stream_generator():
+            try:
+                async for chunk in stream_resp.aiter_bytes():
+                    yield chunk
+            finally:
+                await stream_resp.aclose()
+
+        s_headers = {
+            "X-Request-ID": req_id,
+            "X-EdgeFlow-Target": target_id,
+            "X-EdgeFlow-Fallback": "true" if is_fallback else "false",
+            "X-EdgeFlow-Stream": "true",
+            "X-RateLimit-Limit": str(rate_res.limit),
+            "X-RateLimit-Remaining": str(rate_res.remaining),
+            "X-RateLimit-Reset": str(int(rate_res.reset_after_seconds)),
+        }
+        return StreamingResponse(
+            stream_generator(),
+            status_code=stream_resp.status_code,
+            headers=s_headers,
+            media_type=stream_resp.headers.get("content-type", "text/event-stream"),
+        )
 
     try:
         dispatch_result = await router_engine.dispatch(
